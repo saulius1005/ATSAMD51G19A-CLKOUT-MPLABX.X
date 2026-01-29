@@ -1,0 +1,79 @@
+/* 
+ * File:   main.c
+ * Author: Saulius
+ *
+ * Created on January 25, 2026, 4:22 PM
+ */
+
+#include <xc.h>
+
+void cpu_24MHz_TCXO_init()
+{
+    
+	OSCCTRL_REGS->OSCCTRL_XOSCCTRL[1] = OSCCTRL_XOSCCTRL_ENABLE_Msk;
+    while (!(OSCCTRL_REGS->OSCCTRL_STATUS & OSCCTRL_STATUS_XOSCRDY1_Msk));
+	GCLK_REGS->GCLK_GENCTRL[0] = GCLK_GENCTRL_SRC_XOSC1 | GCLK_GENCTRL_DIV(1) | GCLK_GENCTRL_GENEN_Msk | GCLK_GENCTRL_OE_Msk;
+    while (GCLK_REGS->GCLK_SYNCBUSY & GCLK_SYNCBUSY_GENCTRL_GCLK0);
+    
+    //Microchip studio + ARM compiler
+ 	//OSCCTRL->XOSCCTRL[1].reg = OSCCTRL_XOSCCTRL_ENABLE; //enabling external clock PB22
+	//while (!(OSCCTRL->STATUS.bit.XOSCRDY1)); // waiting for stable clock   
+	//GCLK->GENCTRL[0].reg = GCLK_GENCTRL_SRC_XOSC1 | GCLK_GENCTRL_DIV(1) | GCLK_GENCTRL_GENEN | GCLK_GENCTRL_OE; //common cpu settings
+	//while (GCLK->SYNCBUSY.bit.GENCTRL0);
+}
+
+void cpu_128Mhz_DPLL0_XOSC1_init(){ //using directly xosc1 as dpll0 source
+    
+    OSCCTRL_REGS->OSCCTRL_XOSCCTRL[1] = OSCCTRL_XOSCCTRL_ENABLE_Msk;
+    while (!(OSCCTRL_REGS->OSCCTRL_STATUS & OSCCTRL_STATUS_XOSCRDY1_Msk));   
+    OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLCTRLB = OSCCTRL_DPLLCTRLB_REFCLK_XOSC1 | OSCCTRL_DPLLCTRLB_DIV(3); 
+    OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLRATIO = OSCCTRL_DPLLRATIO_LDR(39) | OSCCTRL_DPLLRATIO_LDRFRAC(21); //3*(39+1+21/32)) 
+    while (OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLSYNCBUSY & OSCCTRL_DPLLSYNCBUSY_DPLLRATIO_Msk);  
+    OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLCTRLA = OSCCTRL_DPLLCTRLA_ENABLE_Msk;
+    while (OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLSYNCBUSY & OSCCTRL_DPLLSYNCBUSY_ENABLE_Msk);   
+    GCLK_REGS->GCLK_GENCTRL[0] = GCLK_GENCTRL_SRC_DPLL0 | GCLK_GENCTRL_DIV(1) | GCLK_GENCTRL_GENEN_Msk | GCLK_GENCTRL_OE_Msk;
+    while (GCLK_REGS->GCLK_SYNCBUSY & GCLK_SYNCBUSY_GENCTRL_GCLK0); 
+    NVMCTRL_REGS->NVMCTRL_CTRLA = NVMCTRL_CTRLA_RWS(5) | NVMCTRL_CTRLA_AUTOWS_Msk; // manual + automatic Wait States
+    while (NVMCTRL_REGS->NVMCTRL_STATUS & NVMCTRL_STATUS_READY(0));
+    
+    //Microchip studio + ARM compiler
+	//OSCCTRL->XOSCCTRL[1].reg = OSCCTRL_XOSCCTRL_ENABLE; //24Mhz cmos oscilator TCXO
+	//while (!(OSCCTRL->STATUS.bit.XOSCRDY1)); // waiting for stable clock
+	// Configure DPLL0 (GCLK mode)
+	//OSCCTRL->Dpll[0].DPLLCTRLB.reg = OSCCTRL_DPLLCTRLB_REFCLK_XOSC1 | OSCCTRL_DPLLCTRLB_DIV(3);//3+1*2= 8| 24/8= 3
+	//OSCCTRL->Dpll[0].DPLLRATIO.reg = OSCCTRL_DPLLRATIO_LDR(39) | OSCCTRL_DPLLRATIO_LDRFRAC(0); // 120 MHz
+	//while (OSCCTRL->Dpll[0].DPLLSYNCBUSY.bit.DPLLRATIO);
+	// Enable DPLL0
+	//OSCCTRL->Dpll[0].DPLLCTRLA.bit.ENABLE = 1;
+	//while (OSCCTRL->Dpll[0].DPLLSYNCBUSY.bit.ENABLE);
+	// Route to GEN0
+	//GCLK->GENCTRL[0].reg = GCLK_GENCTRL_SRC_DPLL0 | GCLK_GENCTRL_DIV(1) | GCLK_GENCTRL_GENEN| GCLK_GENCTRL_OE;
+	//while (!(OSCCTRL->Dpll[0].DPLLSTATUS.bit.LOCK));
+	//while (GCLK->SYNCBUSY.bit.GENCTRL0);	
+	//NVMCTRL->CTRLA.reg = NVMCTRL_CTRLA_RWS(5) | NVMCTRL_CTRLA_AUTOWS; // manual + automatic Wait States
+	//while (NVMCTRL->STATUS.bit.READY == 0);
+
+}
+
+int main(void) {
+    
+    //cpu_24MHz_TCXO_init();
+    cpu_128Mhz_DPLL0_XOSC1_init();
+    
+    PORT_REGS->GROUP[0].PORT_DIRSET = PORT_PA14 | PORT_PA17;
+    PORT_REGS->GROUP[0].PORT_PINCFG[14] = PORT_PINCFG_PMUXEN(1);
+    PORT_REGS->GROUP[0].PORT_PMUX[14>>1] = PORT_PMUX_PMUXE_M;
+    
+    //Microchip studio + ARM compiler
+    //PORT->Group[0].DIRSET.reg = (1 << 14); 	
+	//PORT->Group[0].PINCFG[14].bit.PMUXEN = 1; //set pmux on
+	//PORT->Group[0].PMUX[14 >> 1].bit.PMUXE = 0xC;//PA14 is even so use pmuxe and use  M function (GCLK/IO0)	
+    //PORT->Group[0].DIRSET.reg = (1 << 17); //simple gpio init for pin switching test   
+
+    while(1){
+        PORT_REGS->GROUP[0].PORT_OUTTGL = PORT_PA17;
+        //Microchip studio + ARM compiler
+        //PORT->Group[0].OUTTGL.reg = (1<<17); //switching pin
+    }
+}
+
